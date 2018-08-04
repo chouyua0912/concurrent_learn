@@ -37,9 +37,9 @@ package java.util.concurrent;
 import java.util.concurrent.locks.LockSupport;
 
 /**
- * A cancellable asynchronous computation.  This class provides a base
- * implementation of {@link Future}, with methods to start and cancel
- * a computation, query to see if the computation is complete, and
+ * A cancellable asynchronous computation.  This class provides a base  代理 Callable<V> 的执行，实现结果会写，获取结果同步
+ * implementation of {@link Future}, with methods to start and cancel   维护了等待线程队列
+ * a computation, query to see if the computation is complete, and      实现了 Runnable和Future接口
  * retrieve the result of the computation.  The result can only be
  * retrieved when the computation has completed; the {@code get}
  * methods will block if the computation has not yet completed.  Once
@@ -79,7 +79,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
      * setException, and cancel.  During completion, state may take on
      * transient values of COMPLETING (while outcome is being set) or
      * INTERRUPTING (only while interrupting the runner to satisfy a
-     * cancel(true)). Transitions from these intermediate to final
+     * cancel(true)). Transitions from these intermediate to final         intermediate：中间状态
      * states use cheaper ordered/lazy writes because values are unique
      * and cannot be further modified.
      *
@@ -113,11 +113,11 @@ public class FutureTask<V> implements RunnableFuture<V> {
      * @param s completed state value
      */
     @SuppressWarnings("unchecked")
-    private V report(int s) throws ExecutionException {
+    private V report(int s) throws ExecutionException { // 根据状态获取结果
         Object x = outcome;
         if (s == NORMAL)
             return (V)x;
-        if (s >= CANCELLED)
+        if (s >= CANCELLED) // 取消状态
             throw new CancellationException();
         throw new ExecutionException((Throwable)x);
     }
@@ -185,11 +185,11 @@ public class FutureTask<V> implements RunnableFuture<V> {
     /**
      * @throws CancellationException {@inheritDoc}
      */
-    public V get() throws InterruptedException, ExecutionException {
+    public V get() throws InterruptedException, ExecutionException {    // 获取Callable执行结果，阻塞在
         int s = state;
         if (s <= COMPLETING)
             s = awaitDone(false, 0L);
-        return report(s);
+        return report(s);   // V get() 获取返回值
     }
 
     /**
@@ -227,10 +227,10 @@ public class FutureTask<V> implements RunnableFuture<V> {
      * @param v the value
      */
     protected void set(V v) {
-        if (UNSAFE.compareAndSwapInt(this, stateOffset, NEW, COMPLETING)) {
+        if (UNSAFE.compareAndSwapInt(this, stateOffset, NEW, COMPLETING)) { // 成功回写结果 先置为Completing
             outcome = v;
-            UNSAFE.putOrderedInt(this, stateOffset, NORMAL); // final state
-            finishCompletion();
+            UNSAFE.putOrderedInt(this, stateOffset, NORMAL); // final state  正常结束了
+            finishCompletion(); // set(V v) 成功执行回写结果
         }
     }
 
@@ -245,14 +245,14 @@ public class FutureTask<V> implements RunnableFuture<V> {
      * @param t the cause of failure
      */
     protected void setException(Throwable t) {
-        if (UNSAFE.compareAndSwapInt(this, stateOffset, NEW, COMPLETING)) {
+        if (UNSAFE.compareAndSwapInt(this, stateOffset, NEW, COMPLETING)) { // exception失败 先置Completing
             outcome = t;
             UNSAFE.putOrderedInt(this, stateOffset, EXCEPTIONAL); // final state
             finishCompletion();
         }
     }
 
-    public void run() {
+    public void run() {     // 代理Callable<V> 的执行，将结果result写入 outcome
         if (state != NEW ||
                 !UNSAFE.compareAndSwapObject(this, runnerOffset,
                         null, Thread.currentThread()))
@@ -263,15 +263,15 @@ public class FutureTask<V> implements RunnableFuture<V> {
                 V result;
                 boolean ran;
                 try {
-                    result = c.call();
+                    result = c.call();  // 调用实际方法
                     ran = true;
                 } catch (Throwable ex) {
                     result = null;
                     ran = false;
-                    setException(ex);
+                    setException(ex);   // exception回写执行结果
                 }
                 if (ran)
-                    set(result);
+                    set(result);    // 回写执行结果
             }
         } finally {
             // runner must be non-null until state is settled to
@@ -349,7 +349,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
     /**
      * Simple linked list nodes to record waiting threads in a Treiber
      * stack.  See other classes such as Phaser and SynchronousQueue
-     * for more detailed explanation.
+     * for more detailed explanation.   维护了等待队列
      */
     static final class WaitNode {
         volatile Thread thread;
@@ -363,7 +363,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
      */
     private void finishCompletion() {
         // assert state > COMPLETING;
-        for (WaitNode q; (q = waiters) != null;) {
+        for (WaitNode q; (q = waiters) != null;) {  // 唤醒等待队列中的线程
             if (UNSAFE.compareAndSwapObject(this, waitersOffset, q, null)) {
                 for (;;) {
                     Thread t = q.thread;
@@ -381,7 +381,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
             }
         }
 
-        done();
+        done(); // 子类实现
 
         callable = null;        // to reduce footprint
     }
@@ -391,7 +391,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
      *
      * @param timed true if use timed waits
      * @param nanos time to wait, if timed
-     * @return state upon completion
+     * @return state upon completion        方法执行结束时候的状态 state
      */
     private int awaitDone(boolean timed, long nanos)
             throws InterruptedException {
@@ -405,7 +405,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
             }
 
             int s = state;
-            if (s > COMPLETING) {
+            if (s > COMPLETING) {   // that is NORMAL,EXCEPTIONAL,CANCELLED,INTERRUPTING,INTERRUPTED
                 if (q != null)
                     q.thread = null;
                 return s;

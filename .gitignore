@@ -34,5 +34,3 @@ gen
 .idea/
 SemaphoreFlowControl.iml
 pom.xml
-src/main/resources/
-src/test/

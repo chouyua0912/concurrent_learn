@@ -45,7 +45,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.*;
 
 /**
- * An {@link ExecutorService} that executes each submitted task using
+ * An {@link ExecutorService} that executes each submitted task using       同时最多能接受的任务为 maximumPoolSize + BlockingQueue size
  * one of possibly several pooled threads, normally configured
  * using {@link Executors} factory methods.
  *
@@ -1329,10 +1329,10 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * Executes the given task sometime in the future.  The task            提交线程执行完  1.添加worker     2.入队
      * may execute in a new thread or in an existing pooled thread.                      3.入队失败添加core以外worker
      *                                                                                   4.添加失败后执行拒绝策略后返回
-     * If the task cannot be submitted for execution, either because this
-     * executor has been shutdown or because its capacity has been reached,
-     * the task is handled by the current {@code RejectedExecutionHandler}.
-     *
+     * If the task cannot be submitted for execution, either because this   #####  java.util.concurrent.RejectedExecutionException: Task java.util.concurrent.ExecutorCompletionService$QueueingFuture@617faa95 rejected from java.util.concurrent.ThreadPoolExecutor@60c6f5b[Running, pool size = 10, active threads = 3, queued tasks = 3, completed tasks = 0]
+     * executor has been shutdown or because its capacity has been reached, #!!!   core线程park状态，突然来超过 QueueSize + MaximumPoolSize 的请求，会进入reject
+     * the task is handled by the current {@code RejectedExecutionHandler}.        极端情况 并发极限为 QueueSize + MaximumPoolSize - coreSize, core 处于park状态，poll到Runnable到被调度的时间不确定
+     *                                                                             取决于addWorker到maximum期间内能否及时poll出队列内runnable
      * @param command the task to execute
      * @throws RejectedExecutionException at discretion of
      *         {@code RejectedExecutionHandler}, if the task
