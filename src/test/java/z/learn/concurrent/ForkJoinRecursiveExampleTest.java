@@ -29,7 +29,7 @@ public class ForkJoinRecursiveExampleTest {
         for (int i = 0; i < limit; i++) {
             msg.append(i).append(",");
         }
-        System.out.println(msg.substring(0, msg.length() - 1));
+        // System.out.println(msg.substring(0, msg.length() - 1));
         System.out.println("Time spend :" + (System.currentTimeMillis() - start));
     }
 

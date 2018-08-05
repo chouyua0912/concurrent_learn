@@ -9,20 +9,15 @@ public class ForkJoinRecursiveExample {
 
     public void example(int number) throws InterruptedException {
         PrintTask task = new PrintTask(0, number);
-        //创建实例，并执行分割任务
-        ForkJoinPool pool = new ForkJoinPool();
 
         long start = System.currentTimeMillis();
-        ForkJoinTask<String> ret = pool.submit(task);
+        ForkJoinTask<String> ret = ForkJoinPool.commonPool().submit(task);
         try {
             System.out.println(ret.get());
         } catch (ExecutionException e) {
             e.printStackTrace();
         }
         System.out.println("time spend on fork join :" + (System.currentTimeMillis() - start));
-        //线程阻塞，等待所有任务完成
-        pool.awaitTermination(2, TimeUnit.SECONDS);
-        pool.shutdown();
     }
 
     class PrintTask extends RecursiveTask<String> {
