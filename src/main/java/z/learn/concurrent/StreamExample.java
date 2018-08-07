@@ -4,6 +4,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Spliterator splitable iterator可分割迭代器
+ */
 public class StreamExample {
 
     public void example() {
