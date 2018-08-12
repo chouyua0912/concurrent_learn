@@ -123,7 +123,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
         abstract void lock();
 
         /**
-         * Performs non-fair tryLock.  tryAcquire is implemented in
+         * Performs non-fair tryLock.  tryAcquire is implemented in     非公平获取锁   如果state=0，直接尝试获取锁，或者state!=0，当前是自己持有锁则重入
          * subclasses, but both need nonfair try for trylock method.
          */
         final boolean nonfairTryAcquire(int acquires) {
@@ -135,26 +135,26 @@ public class ReentrantLock implements Lock, java.io.Serializable {
                     return true;
                 }
             }
-            else if (current == getExclusiveOwnerThread()) {
+            else if (current == getExclusiveOwnerThread()) {            // 当前线程持有锁状态，其他线程都不能更新state，可以
                 int nextc = c + acquires;
-                if (nextc < 0) // overflow
+                if (nextc < 0) // overflow  溢出了
                     throw new Error("Maximum lock count exceeded");
                 setState(nextc);
                 return true;
             }
-            return false;
+            return false;                                               // 锁被其他线程抢占，或者已经被其他线程所持有， 获取锁失败
         }
 
         protected final boolean tryRelease(int releases) {
             int c = getState() - releases;
-            if (Thread.currentThread() != getExclusiveOwnerThread())
+            if (Thread.currentThread() != getExclusiveOwnerThread())    // 持有锁才能释放
                 throw new IllegalMonitorStateException();
             boolean free = false;
-            if (c == 0) {
+            if (c == 0) {                                               // 释放完毕，需要清空当前持有者
                 free = true;
                 setExclusiveOwnerThread(null);
             }
-            setState(c);
+            setState(c);                                                // 释放锁，允许其他线程竞争
             return free;
         }
 
@@ -199,7 +199,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
         private static final long serialVersionUID = 7316153563782823691L;
 
         /**
-         * Performs lock.  Try immediate barge, backing up to normal
+         * Performs lock.  Try immediate barge, backing up to normal        非公平乐观锁，抢占式   进入时直接尝试获取，失败则调用acquire获取
          * acquire on failure.
          */
         final void lock() {
