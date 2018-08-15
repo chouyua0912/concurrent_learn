@@ -31,7 +31,7 @@ public class ReentrantLockConditionExample {
         producer3.start();
 
 
-        Thread.sleep(10 * 1000);
+        Thread.sleep(10 * 60 * 1000);
         consumer.interrupt();
         consumer2.interrupt();
 

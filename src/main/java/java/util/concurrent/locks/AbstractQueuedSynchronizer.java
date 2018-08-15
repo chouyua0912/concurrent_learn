@@ -383,7 +383,7 @@ public abstract class AbstractQueuedSynchronizer
         /** Marker to indicate a node is waiting in exclusive mode    初始化值是null，表示为独占节点 */
         static final Node EXCLUSIVE = null;
 
-        /** waitStatus value to indicate thread has cancelled */
+        /** waitStatus value to indicate thread has cancelled         初始化状态值为0   */
         static final int CANCELLED =  1;
         /** waitStatus value to indicate successor's thread needs unparking */
         static final int SIGNAL    = -1;
@@ -578,7 +578,7 @@ public abstract class AbstractQueuedSynchronizer
     /**
      * Inserts node into queue, initializing if necessary. See picture above.   无限循环入队
      * @param node the node to insert
-     * @return node's predecessor
+     * @return node's predecessor               返回的是前驱节点
      */
     private Node enq(final Node node) {
         for (;;) {
@@ -1667,11 +1667,11 @@ public abstract class AbstractQueuedSynchronizer
      * @return true if successfully transferred (else the node was
      * cancelled before signal)
      */
-    final boolean transferForSignal(Node node) {
+    final boolean transferForSignal(Node node) {                // node已经出队了，要把他移动到同步队列，唤醒的动作是释放锁的时候如果是首节点会唤醒
         /*
          * If cannot change waitStatus, the node has been cancelled.
          */
-        if (!compareAndSetWaitStatus(node, Node.CONDITION, 0))
+        if (!compareAndSetWaitStatus(node, Node.CONDITION, 0))      // 清空条件等待为初始值
             return false;
 
         /*
@@ -1680,10 +1680,10 @@ public abstract class AbstractQueuedSynchronizer
          * attempt to set waitStatus fails, wake up to resync (in which
          * case the waitStatus can be transiently and harmlessly wrong).
          */
-        Node p = enq(node);
+        Node p = enq(node);                                                 // 入队到同步队列
         int ws = p.waitStatus;
-        if (ws > 0 || !compareAndSetWaitStatus(p, ws, Node.SIGNAL))
-            LockSupport.unpark(node.thread);
+        if (ws > 0 || !compareAndSetWaitStatus(p, ws, Node.SIGNAL))         // 已经被取消了，或者设置信号失败，需要唤醒前驱节点的线程
+            LockSupport.unpark(node.thread);            // 唤醒前驱节点对应的线程，重新调整条件队列
         return true;
     }
 
@@ -1842,37 +1842,37 @@ public abstract class AbstractQueuedSynchronizer
         // Internal methods
 
         /**
-         * Adds a new waiter to wait queue.
+         * Adds a new waiter to wait queue.                 被锁保护等待状态下调用  不存在并发问题
          * @return its new wait node
          */
         private Node addConditionWaiter() {
             Node t = lastWaiter;
             // If lastWaiter is cancelled, clean out.
-            if (t != null && t.waitStatus != Node.CONDITION) {
+            if (t != null && t.waitStatus != Node.CONDITION) {              // 状态已经被清楚，需要删除等待节点
                 unlinkCancelledWaiters();
                 t = lastWaiter;
             }
-            Node node = new Node(Thread.currentThread(), Node.CONDITION);
-            if (t == null)
+            Node node = new Node(Thread.currentThread(), Node.CONDITION);   // 创建新的条件队列节点，初始化状态为条件等待
+            if (t == null)                                                  // 同步队列还没有初始化，设置好firstWaiter
                 firstWaiter = node;
             else
-                t.nextWaiter = node;
-            lastWaiter = node;
+                t.nextWaiter = node;                                        // 新节点链到链表尾巴
+            lastWaiter = node;                                              // lastWaiter指向新的尾巴
             return node;
         }
 
         /**
-         * Removes and transfers nodes until hit non-cancelled one or
+         * Removes and transfers nodes until hit non-cancelled one or       通过值传递已经做过了缓存，持有锁状态，不用担心竞争
          * null. Split out from signal in part to encourage compilers
          * to inline the case of no waiters.
          * @param first (non-null) the first node on condition queue
          */
         private void doSignal(Node first) {
             do {
-                if ( (firstWaiter = first.nextWaiter) == null)
-                    lastWaiter = null;
-                first.nextWaiter = null;
-            } while (!transferForSignal(first) &&
+                if ( (firstWaiter = first.nextWaiter) == null)  // 首节点已经出队    将后一个节点作为新的条件队列首节点
+                    lastWaiter = null;                          // 新的首节点已经是null了，则last也需要重置为null，队列已经空了
+                first.nextWaiter = null;                        // 清空原来的首节点next
+            } while (!transferForSignal(first) &&               // 传递信号，转换到新的
                     (first = firstWaiter) != null);
         }
 
@@ -1927,7 +1927,7 @@ public abstract class AbstractQueuedSynchronizer
         // public methods
 
         /**
-         * Moves the longest-waiting thread, if one exists, from the
+         * Moves the longest-waiting thread, if one exists, from the                移动单个条件等待线程到同步队列
          * wait queue for this condition to the wait queue for the
          * owning lock.
          *
@@ -1935,15 +1935,15 @@ public abstract class AbstractQueuedSynchronizer
          *         returns {@code false}
          */
         public final void signal() {
-            if (!isHeldExclusively())
+            if (!isHeldExclusively())                       // 必须要持有锁才行
                 throw new IllegalMonitorStateException();
-            Node first = firstWaiter;
+            Node first = firstWaiter;                       // 从头结点开始出队， first!=null, 说明已经有节点在等待,需要唤醒转移到同步队列
             if (first != null)
                 doSignal(first);
         }
 
         /**
-         * Moves all threads from the wait queue for this condition to
+         * Moves all threads from the wait queue for this condition to              移动所有的条件等待线程到同步队列
          * the wait queue for the owning lock.
          *
          * @throws IllegalMonitorStateException if {@link #isHeldExclusively}
@@ -2017,7 +2017,7 @@ public abstract class AbstractQueuedSynchronizer
         }
 
         /**
-         * Implements interruptible condition wait.
+         * Implements interruptible condition wait.                                 持有锁状态下调用，被锁保护起来，不存在并发问题
          * <ol>
          * <li> If current thread is interrupted, throw InterruptedException.
          * <li> Save lock state returned by {@link #getState}.
@@ -2036,7 +2036,7 @@ public abstract class AbstractQueuedSynchronizer
             int savedState = fullyRelease(node);
             int interruptMode = 0;
             while (!isOnSyncQueue(node)) {
-                LockSupport.park(this);
+                LockSupport.park(this);         // 挂起线程，等待信号唤醒
                 if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
                     break;
             }
