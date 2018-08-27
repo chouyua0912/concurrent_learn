@@ -145,7 +145,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
             return false;                                               // 锁被其他线程抢占，或者已经被其他线程所持有， 获取锁失败
         }
 
-        protected final boolean tryRelease(int releases) {
+        protected final boolean tryRelease(int releases) {              /**持有锁状态，没有竞争**/
             int c = getState() - releases;
             if (Thread.currentThread() != getExclusiveOwnerThread())    // 持有锁才能释放
                 throw new IllegalMonitorStateException();
@@ -155,7 +155,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
                 setExclusiveOwnerThread(null);
             }
             setState(c);                                                // 释放锁，允许其他线程竞争
-            return free;
+            return free;                                                // 返回释放释放完毕
         }
 
         protected final boolean isHeldExclusively() {
