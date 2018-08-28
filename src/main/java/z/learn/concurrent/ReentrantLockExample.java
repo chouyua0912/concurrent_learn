@@ -3,6 +3,9 @@ package z.learn.concurrent;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.locks.ReentrantLock;
 
+/**
+ * 单个线程进入同步队列等待
+ */
 public class ReentrantLockExample {
 
     ReentrantLock lock = new ReentrantLock();

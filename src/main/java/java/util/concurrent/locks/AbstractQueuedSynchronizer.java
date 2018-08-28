@@ -475,7 +475,7 @@ public abstract class AbstractQueuedSynchronizer
          * we save a field by using special value to indicate shared
          * mode.
          */
-        Node nextWaiter;
+        Node nextWaiter;                                // 条件队列
 
         /**
          * Returns true if node is waiting in shared mode.
@@ -580,7 +580,7 @@ public abstract class AbstractQueuedSynchronizer
      * @param node the node to insert
      * @return node's predecessor               返回的是前驱节点
      */
-    private Node enq(final Node node) {
+    private Node enq(final Node node) {             // 同步队列
         for (;;) {
             Node t = tail;
             if (t == null) { // Must initialize
@@ -1074,7 +1074,7 @@ public abstract class AbstractQueuedSynchronizer
      */
     protected boolean tryAcquire(int arg) {
         throw new UnsupportedOperationException();
-    }
+    }       // 模板方法
 
     /**
      * Attempts to set the state to reflect a release in exclusive
@@ -2019,8 +2019,8 @@ public abstract class AbstractQueuedSynchronizer
         /**
          * Implements interruptible condition wait.                                 持有锁状态下调用，被锁保护起来，不存在并发问题
          * <ol>
-         * <li> If current thread is interrupted, throw InterruptedException.
-         * <li> Save lock state returned by {@link #getState}.
+         * <li> If current thread is interrupted, throw InterruptedException.       持有锁时候肯定是不在同步队列里面的，首先addConditionWaiter把自己加入到条件队列
+         * <li> Save lock state returned by {@link #getState}.                      再判断自己有没有被从条件队列移动到同步队列判断条件是否已经满足，已经接收到信号
          * <li> Invoke {@link #release} with saved state as argument,
          *      throwing IllegalMonitorStateException if it fails.
          * <li> Block until signalled or interrupted.
