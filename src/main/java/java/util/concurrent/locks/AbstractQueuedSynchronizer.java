@@ -613,7 +613,7 @@ public abstract class AbstractQueuedSynchronizer
                 return node;
             }
         }
-        enq(node);              // 无限循环入队
+        enq(node);                  // 无限循环入队
         return node;
     }
 
@@ -847,14 +847,14 @@ public abstract class AbstractQueuedSynchronizer
      */
 
     /**
-     * Acquires in exclusive uninterruptible mode for thread already in     死循环一直获取到锁为止
+     * Acquires in exclusive uninterruptible mode for thread already in     死循环一直获取到锁为止         独占模式获取
      * queue. Used by condition wait methods as well as acquire.            不受中断影响 但是会返回是否被中断过
      *
      * @param node the node
      * @param arg the acquire argument
      * @return {@code true} if interrupted while waiting
      */
-    final boolean acquireQueued(final Node node, int arg) {
+    final boolean acquireQueued(final Node node, int arg) {         // 独占模式获取锁！！！
         boolean failed = true;
         try {
             boolean interrupted = false;
@@ -946,7 +946,7 @@ public abstract class AbstractQueuedSynchronizer
      * @param arg the acquire argument
      */
     private void doAcquireShared(int arg) {
-        final Node node = addWaiter(Node.SHARED);
+        final Node node = addWaiter(Node.SHARED);       // 以共享模式入队
         boolean failed = true;
         try {
             boolean interrupted = false;
@@ -1120,8 +1120,8 @@ public abstract class AbstractQueuedSynchronizer
      *        to a condition wait.  The value is otherwise uninterpreted
      *        and can represent anything you like.
      * @return a negative value on failure; zero if acquisition in shared
-     *         mode succeeded but no subsequent shared-mode acquire can
-     *         succeed; and a positive value if acquisition in shared
+     *         mode succeeded but no subsequent shared-mode acquire can         0：获取成功，后续不能获取
+     *         succeed; and a positive value if acquisition in shared           >0：获取成功，后续可能也会获取成功
      *         mode succeeded and subsequent shared-mode acquires might
      *         also succeed, in which case a subsequent waiting thread
      *         must check availability. (Support for three different
@@ -1134,7 +1134,7 @@ public abstract class AbstractQueuedSynchronizer
      *         correctly.
      * @throws UnsupportedOperationException if shared mode is not supported
      */
-    protected int tryAcquireShared(int arg) {
+    protected int tryAcquireShared(int arg) {           // 小于0 表示获取失败
         throw new UnsupportedOperationException();
     }
 
@@ -1279,7 +1279,7 @@ public abstract class AbstractQueuedSynchronizer
      *        and can represent anything you like.
      */
     public final void acquireShared(int arg) {
-        if (tryAcquireShared(arg) < 0)
+        if (tryAcquireShared(arg) < 0)          // >=0 说明获取成功了， <0 获取失败
             doAcquireShared(arg);
     }
 
@@ -1461,8 +1461,8 @@ public abstract class AbstractQueuedSynchronizer
     final boolean apparentlyFirstQueuedIsExclusive() {
         Node h, s;
         return (h = head) != null &&
-                (s = h.next)  != null &&
-                !s.isShared()         &&
+                (s = h.next)  != null &&            // 只检查了首节点
+                !s.isShared()         &&            // 共享模式，且有绑定线程
                 s.thread != null;
     }
 
