@@ -1063,15 +1063,15 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
 
             if ((wc > maximumPoolSize || (timed && timedOut))
                     && (wc > 1 || workQueue.isEmpty())) {
-                if (compareAndDecrementWorkerCount(c))
+                if (compareAndDecrementWorkerCount(c))              // 成功减少了workerCount，可以返回null，然runWorker自然结束了
                     return null;
                 continue;
             }
 
             try {
-                Runnable r = timed ?
+                Runnable r = timed ?                                // 只有核心线程可以死亡的时候才会定期去检查线程池关闭状态
                         workQueue.poll(keepAliveTime, TimeUnit.NANOSECONDS) :   // poll失败之后会尝试减少worker数量
-                        workQueue.take();
+                        workQueue.take();       // 阻塞一直获取到数据 Retrieves and removes the head of this queue, waiting if necessary until an element becomes available.
                 if (r != null)
                     return r;
                 timedOut = true;
@@ -1395,8 +1395,8 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         mainLock.lock();
         try {
             checkShutdownAccess();
-            advanceRunState(SHUTDOWN);
-            interruptIdleWorkers();
+            advanceRunState(SHUTDOWN);  // 跳转到SHUTDOWN状态
+            interruptIdleWorkers();     // 通过打断worker线程来唤醒park在getTask（take）的的线程
             onShutdown(); // hook for ScheduledThreadPoolExecutor
         } finally {
             mainLock.unlock();
@@ -1427,9 +1427,9 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         mainLock.lock();
         try {
             checkShutdownAccess();
-            advanceRunState(STOP);
+            advanceRunState(STOP);      // 直接跳转到STOP状态
             interruptWorkers();
-            tasks = drainQueue();
+            tasks = drainQueue();       // 把队列中等待执行的任务全部移出队列
         } finally {
             mainLock.unlock();
         }
