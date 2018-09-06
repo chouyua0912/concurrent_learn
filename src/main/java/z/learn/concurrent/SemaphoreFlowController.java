@@ -6,6 +6,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 定期释放出信号量给acquire线程使用
+ * 信号量的上限实际是没有控制的
+ */
 public class SemaphoreFlowController {
 
     final static int MAX_QPS = 10;
@@ -13,7 +17,7 @@ public class SemaphoreFlowController {
 
     public static void main(String... args) throws Exception {
 
-        Executors.newScheduledThreadPool(1)
+        Executors.newScheduledThreadPool(1)     // 要实现流量控制，需要定期释放信号
                 .scheduleAtFixedRate(() -> semaphore.release(MAX_QPS / 2), 1000, 500, TimeUnit.MILLISECONDS);
 
         //lots of concurrent calls:100 * 1000
@@ -25,7 +29,7 @@ public class SemaphoreFlowController {
 
             pool.submit(() -> {
                 for (int j = 1000; j > 0; j--) {
-                    semaphore.acquireUninterruptibly(1);
+                    semaphore.acquireUninterruptibly(1);        // 一直阻塞到获取到，或者被中断
                     remoteCall(x, j);
                 }
 

@@ -38,7 +38,7 @@ import java.util.Collection;
 import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 
 /**
- * A counting semaphore.  Conceptually, a semaphore maintains a set of
+ * A counting semaphore.  Conceptually, a semaphore maintains a set of          基于AQS实现的
  * permits.  Each {@link #acquire} blocks if necessary until a permit is
  * available, and then takes it.  Each {@link #release} adds a permit,
  * potentially releasing a blocking acquirer.
@@ -174,20 +174,20 @@ public class Semaphore implements java.io.Serializable {
             return getState();
         }
 
-        final int nonfairTryAcquireShared(int acquires) {
+        final int nonfairTryAcquireShared(int acquires) {               // 获取锁，获取信号量   直到成功为止
             for (;;) {
                 int available = getState();
                 int remaining = available - acquires;
-                if (remaining < 0 ||
-                        compareAndSetState(available, remaining))
+                if (remaining < 0 ||                                    // >=0 表示还有可以获取到的信号   要么已经没有足够信号量获取了退出，要么成功获取到了信号退出
+                        compareAndSetState(available, remaining))       // 有获取到可能之前都不会返回
                     return remaining;
             }
         }
 
-        protected final boolean tryReleaseShared(int releases) {
+        protected final boolean tryReleaseShared(int releases) {        // 释放的时候是增长信号量
             for (;;) {
                 int current = getState();
-                int next = current + releases;
+                int next = current + releases;                          // 增加可获得的信号         没有限制最大可以释放的信号量
                 if (next < current) // overflow
                     throw new Error("Maximum permit count exceeded");
                 if (compareAndSetState(current, next))
@@ -242,7 +242,7 @@ public class Semaphore implements java.io.Serializable {
 
         protected int tryAcquireShared(int acquires) {
             for (;;) {
-                if (hasQueuedPredecessors())
+                if (hasQueuedPredecessors())                // 公平式，首先检查是否有等待节点
                     return -1;
                 int available = getState();
                 int remaining = available - acquires;
@@ -489,9 +489,9 @@ public class Semaphore implements java.io.Serializable {
      * @param permits the number of permits to acquire
      * @throws IllegalArgumentException if {@code permits} is negative
      */
-    public void acquireUninterruptibly(int permits) {
+    public void acquireUninterruptibly(int permits) {               // 不接受打断，一直到成功为止
         if (permits < 0) throw new IllegalArgumentException();
-        sync.acquireShared(permits);
+        sync.acquireShared(permits);                    // 共享方式一直获取到为止
     }
 
     /**
@@ -521,9 +521,9 @@ public class Semaphore implements java.io.Serializable {
      *         {@code false} otherwise
      * @throws IllegalArgumentException if {@code permits} is negative
      */
-    public boolean tryAcquire(int permits) {
+    public boolean tryAcquire(int permits) {                        // 尝试获取，所以有boolean返回值
         if (permits < 0) throw new IllegalArgumentException();
-        return sync.nonfairTryAcquireShared(permits) >= 0;
+        return sync.nonfairTryAcquireShared(permits) >= 0;          // 》=0 说明获取成功了，
     }
 
     /**
