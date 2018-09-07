@@ -40,7 +40,7 @@ import java.util.Collection;
 /**
  * An implementation of {@link ReadWriteLock} supporting similar        基于AQS实现
  * semantics to {@link ReentrantLock}.                                  通过AQS的acquire, acquireShared 来实现读写锁
- * <p>This class has the following properties:
+ * <p>This class has the following properties:                          悲观锁
  *
  * <ul>
  * <li><b>Acquisition order</b>
