@@ -42,7 +42,7 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.LockSupport;
 
 /**
- * A capability-based lock with three modes for controlling read/write      读写锁的改进
+ * A capability-based lock with three modes for controlling read/write      读写锁的改进  不可重入的
  * access.  The state of a StampedLock consists of a version and mode.       Stamped：信戳，信笺？
  * Lock acquisition methods return a stamp that represents and              不基于AQS实现，只基于CAS实现的
  * controls access with respect to a lock state; "try" versions of
@@ -325,7 +325,7 @@ public class StampedLock implements java.io.Serializable {
     private transient volatile WNode wtail;
 
     // views
-    transient ReadLockView readLockView;
+    transient ReadLockView readLockView;            //
     transient WriteLockView writeLockView;
     transient ReadWriteLockView readWriteLockView;
 
@@ -342,20 +342,20 @@ public class StampedLock implements java.io.Serializable {
     }
 
     /**
-     * Exclusively acquires the lock, blocking if necessary
+     * Exclusively acquires the lock, blocking if necessary         抢占式获取，没有获取到则进入队列获取
      * until available.
      *
      * @return a stamp that can be used to unlock or convert mode
      */
     public long writeLock() {
         long s, next;  // bypass acquireWrite in fully unlocked case only
-        return ((((s = state) & ABITS) == 0L &&
-                U.compareAndSwapLong(this, STATE, s, next = s + WBIT)) ?
+        return ((((s = state) & ABITS) == 0L &&     // 低8位全部是0                  已经被标记WBIT了直接进入acquireWrite
+                U.compareAndSwapLong(this, STATE, s, next = s + WBIT)) ?        // 是否可以继续加 WBIT？  不可重入锁
                 next : acquireWrite(false, 0L));
     }
 
     /**
-     * Exclusively acquires the lock if it is immediately available.
+     * Exclusively acquires the lock if it is immediately available.                跟上面差别就是不进入死循环获取锁
      *
      * @return a stamp that can be used to unlock or convert mode,
      * or zero if the lock is not available
@@ -527,7 +527,7 @@ public class StampedLock implements java.io.Serializable {
      */
     public boolean validate(long stamp) {           // 这里主要包括了loadFence、storeFence、fullFence等方法，这些方法是在Java 8新引入的，用于定义内存屏障，避免代码重排序，与Java内存模型相关
         U.loadFence();                              // U.loadFence() 在该方法之前的所有读操作，一定在load屏障之前执行完成
-        return (stamp & SBITS) == (state & SBITS);  // 比较stamp是否和state相等
+        return (stamp & SBITS) == (state & SBITS);  // 按位与 比较stamp是否和state相等
     }
 
     /**
@@ -540,7 +540,7 @@ public class StampedLock implements java.io.Serializable {
      */
     public void unlockWrite(long stamp) {
         WNode h;
-        if (state != stamp || (stamp & WBIT) == 0L)
+        if (state != stamp || (stamp & WBIT) == 0L)         // state被改变则数据被损坏  WBIT == 0， 没有持有写锁就在释放，异常状态
             throw new IllegalMonitorStateException();
         state = (stamp += WBIT) == 0L ? ORIGIN : stamp;
         if ((h = whead) != null && h.status != 0)
@@ -832,7 +832,7 @@ public class StampedLock implements java.io.Serializable {
     // views
 
     /**
-     * Returns a plain {@link Lock} view of this StampedLock in which
+     * Returns a plain {@link Lock} view of this StampedLock in which       方法是线程不安全的，不支持 Condition 操作
      * the {@link Lock#lock} method is mapped to {@link #readLock},
      * and similarly for other methods. The returned Lock does not
      * support a {@link Condition}; method {@link
@@ -841,7 +841,7 @@ public class StampedLock implements java.io.Serializable {
      *
      * @return the lock
      */
-    public Lock asReadLock() {
+    public Lock asReadLock() {          // 返回的是Lock接口的实现类 ReadLockView
         ReadLockView v;
         return ((v = readLockView) != null ? v :
                 (readLockView = new ReadLockView()));
@@ -879,7 +879,7 @@ public class StampedLock implements java.io.Serializable {
 
     // view classes
 
-    final class ReadLockView implements Lock {
+    final class ReadLockView implements Lock {                          // 封装了StampedLock的对外接口 出来简化使用、明确的方法名字   包外部不可见
         public void lock() { readLock(); }
         public void lockInterruptibly() throws InterruptedException {
             readLockInterruptibly();
@@ -1020,14 +1020,14 @@ public class StampedLock implements java.io.Serializable {
                         q = t;
             }
             if (q != null && (w = q.thread) != null)
-                U.unpark(w);
+                U.unpark(w);                                        // 唤醒线程， acquireWrite,acquireRead时候会挂起线程
         }
     }
 
     /**
      * See above for explanation.
      *
-     * @param interruptible true if should check interrupts and if so
+     * @param interruptible true if should check interrupts and if so       是否允许中断退出
      * return INTERRUPTED
      * @param deadline if nonzero, the System.nanoTime value to timeout
      * at (and return zero)
@@ -1035,7 +1035,7 @@ public class StampedLock implements java.io.Serializable {
      */
     private long acquireWrite(boolean interruptible, long deadline) {
         WNode node = null, p;
-        for (int spins = -1;;) { // spin while enqueuing
+        for (int spins = -1;;) { // spin while enqueuing                    入队线程
             long m, s, ns;
             if ((m = (s = state) & ABITS) == 0L) {
                 if (U.compareAndSwapLong(this, STATE, s, ns = s + WBIT))
@@ -1116,7 +1116,7 @@ public class StampedLock implements java.io.Serializable {
                     node.thread = wt;
                     if (p.status < 0 && (p != h || (state & ABITS) != 0L) &&
                             whead == h && node.prev == p)
-                        U.park(false, time);  // emulate LockSupport.park
+                        U.park(false, time);  // emulate LockSupport.park           挂起线程, unlock->release 的时候会unpark唤醒线程
                     node.thread = null;
                     U.putObject(wt, PARKBLOCKER, null);
                     if (interruptible && Thread.interrupted())
