@@ -29,5 +29,10 @@ public class StampedLockDemoTest {
         example.StampedLockView();
     }
 
+    @Test
+    public void testReadLockTwo() {
+        example.readLockTwo();
+    }
+
     private StampedLockDemo example = new StampedLockDemo();
 } 

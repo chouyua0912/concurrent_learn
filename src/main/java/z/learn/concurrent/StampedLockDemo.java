@@ -4,6 +4,10 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.StampedLock;
 
+/**
+ * 不像ReadWriteLock，StampedLocks是不可重入的。因此尽管StampedLocks可能更快，但可能产生死锁。在实践中，这意味着你应该始终确保锁以及对应的门票不要逃逸出所在的代码块。
+ * http://ifeve.com/java-8-stampedlocks-vs-readwritelocks-and-synchronized/
+ */
 class StampedLockDemo {
 
     /**
@@ -41,13 +45,32 @@ class StampedLockDemo {
     }
 
     /**
+     * 读取锁一定程度上可以重入？
+     */
+    void readLockTwo() {
+        StampedLock s = new StampedLock();
+        long stamp = s.readLock();
+        try {
+            System.out.println("read1");
+            long stamp2 = s.readLock();
+            try {
+                System.out.println("read2");
+            } finally {
+                s.unlockRead(stamp2);
+            }
+        } finally {
+            s.unlockRead(stamp);
+        }
+    }
+
+    /**
      * 也可以通过View来使用
      * 提供更易懂的接口来使用信笺锁
      */
     void StampedLockView() {
         StampedLock s = new StampedLock();
-        Lock read = s.asReadLock();
-        Lock write = s.asWriteLock();
+        Lock read = s.asReadLock();                 // 封装了readLock()，condition功能，没有乐观读功能optimistic read
+        Lock write = s.asWriteLock();               // 封装了writeLock()，不支持condition
         ReadWriteLock rw = s.asReadWriteLock();
         System.out.println(read);
         System.out.println(write);

@@ -43,9 +43,9 @@ import java.util.concurrent.locks.LockSupport;
 
 /**
  * A capability-based lock with three modes for controlling read/write      读写锁的改进  不可重入的
- * access.  The state of a StampedLock consists of a version and mode.       Stamped：信戳，信笺？
- * Lock acquisition methods return a stamp that represents and              不基于AQS实现，只基于CAS实现的
- * controls access with respect to a lock state; "try" versions of
+ * access.  The state of a StampedLock consists of a version and mode.      Stamped：信戳，信笺？
+ * Lock acquisition methods return a stamp that represents and              不基于AQS实现，只基于CAS实现的，维护了CLH队列
+ * controls access with respect to a lock state; "try" versions of          https://blog.csdn.net/LightOfMiracle/article/details/73223614 源码分析文章
  * these methods may instead return the special value zero to
  * represent failure to acquire access. Lock release and conversion
  * methods require stamps as arguments, and fail if they do not match
@@ -57,7 +57,7 @@ import java.util.concurrent.locks.LockSupport;
  *   waiting for exclusive access, returning a stamp that can be used
  *   in method {@link #unlockWrite} to release the lock. Untimed and
  *   timed versions of {@code tryWriteLock} are also provided. When
- *   the lock is held in write mode, no read locks may be obtained,
+ *   the lock is held in write mode, no read locks may be obtained,         写锁被持有的时候，读取都会被阻塞  废话。。
  *   and all optimistic read validations will fail.  </li>
  *
  *  <li><b>Reading.</b> Method {@link #readLock} possibly blocks
@@ -268,16 +268,16 @@ public class StampedLock implements java.io.Serializable {
 
     private static final long serialVersionUID = -6001602636862214147L;
 
-    /** Number of processors, for spin control */
+    /** Number of processors, for spin control  入队之前还会进行一段时间的自旋获取锁      获取CPU的可用线程数量，用于确定自旋的时候循环次数 */
     private static final int NCPU = Runtime.getRuntime().availableProcessors();
 
-    /** Maximum number of retries before enqueuing on acquisition */
+    /** Maximum number of retries before enqueuing on acquisition           根据NCPU确定自旋的次数限制(并不是一定这么多次，因为实际代码中是随机的) */
     private static final int SPINS = (NCPU > 1) ? 1 << 6 : 0;
 
-    /** Maximum number of retries before blocking at head on acquisition */
+    /** Maximum number of retries before blocking at head on acquisition    头节点上的自旋次数 */
     private static final int HEAD_SPINS = (NCPU > 1) ? 1 << 10 : 0;
 
-    /** Maximum number of retries before re-blocking */
+    /** Maximum number of retries before re-blocking                        头节点上的最大自旋次数 */
     private static final int MAX_HEAD_SPINS = (NCPU > 1) ? 1 << 16 : 0;
 
     /** The period for yielding when waiting for overflow spinlock */
@@ -290,55 +290,55 @@ public class StampedLock implements java.io.Serializable {
     private static final long RUNIT = 1L;                   // bitwise inclusive OR ： |        bitwise AND ： &
     private static final long WBIT  = 1L << LG_READERS;     //              128: 10000000       只用 128 这一个比特位标识 读取线程已经占有
     private static final long RBITS = WBIT - 1L;            //              127: 01111111
-    private static final long RFULL = RBITS - 1L;           //              126: 01111110
+    private static final long RFULL = RBITS - 1L;           //              126: 01111110       读取允许的最大值 126
     private static final long ABITS = RBITS | WBIT;         //              255: 11111111
     private static final long SBITS = ~RBITS; // note overlap with ABITS   -128: 1111111111111111111111111111111111111111111111111111111110000000
 
-    // Initial value for lock state; avoid failure value zero
+    // Initial value for lock state; avoid failure value zero                   初始化状态
     private static final long ORIGIN = WBIT << 1;
 
-    // Special value from cancelled acquire methods so caller can throw IE
+    // Special value from cancelled acquire methods so caller can throw IE      中断标识
     private static final long INTERRUPTED = 1L;
 
     // Values for node status; order matters
     private static final int WAITING   = -1;
     private static final int CANCELLED =  1;
 
-    // Modes for nodes (int not boolean to allow arithmetic)
+    // Modes for nodes (int not boolean to allow arithmetic)                    读/写状态
     private static final int RMODE = 0;
     private static final int WMODE = 1;
 
-    /** Wait nodes */
+    /** Wait nodes                  等待节点 */
     static final class WNode {
         volatile WNode prev;
         volatile WNode next;
-        volatile WNode cowait;    // list of linked readers
+        volatile WNode cowait;    // list of linked readers             cowait，用于链接等待获取读状态的节点
         volatile Thread thread;   // non-null while possibly parked
         volatile int status;      // 0, WAITING, or CANCELLED
         final int mode;           // RMODE or WMODE
         WNode(int m, WNode p) { mode = m; prev = p; }
     }
 
-    /** Head of CLH queue */
+    /** Head of CLH queue           同步队列  */
     private transient volatile WNode whead;
     /** Tail (last) of CLH queue */
     private transient volatile WNode wtail;
 
     // views
-    transient ReadLockView readLockView;            //
+    transient ReadLockView readLockView;            // 记录通过asReadLock 单例模式返回的view
     transient WriteLockView writeLockView;
     transient ReadWriteLockView readWriteLockView;
 
-    /** Lock sequence/state */
+    /** Lock sequence/state     同步状态变量 StampedLock采用了一个long型作为state，把这个64位的state的前7位作为读状态（最大127），第8位标识写状态，这也是为什么不支持重入的原因吧。 */
     private transient volatile long state;
-    /** extra reader count when state read count saturated */
+    /** extra reader count when state read count saturated      因为读状态只有7位很小，所以当超过了128之后将使用一个int变量来记录*/
     private transient int readerOverflow;
 
     /**
      * Creates a new lock, initially in unlocked state.
      */
     public StampedLock() {
-        state = ORIGIN;
+        state = ORIGIN;         // 256 = 1 0000 0000 二进制
     }
 
     /**
@@ -421,10 +421,10 @@ public class StampedLock implements java.io.Serializable {
      *
      * @return a stamp that can be used to unlock or convert mode
      */
-    public long readLock() {
-        long s = state, next;  // bypass acquireRead on common uncontended case
-        return ((whead == wtail && (s & ABITS) < RFULL &&
-                U.compareAndSwapLong(this, STATE, s, next = s + RUNIT)) ?
+    public long readLock() {   // uncontended: 非竞争      同步队列为空并且读状态没有超过最大值则直接尝试CAS设置同步状态，否则调用acquireRead方法
+        long s = state, next;  // bypass acquireRead on common uncontended case   ABITS = 255, 检查写bit和读bit还有剩余，低位读取最多有126
+        return ((whead == wtail && (s & ABITS) < RFULL &&                       // 同步队列为空，并且 读取还小于 126，直接抢占CAS读取
+                U.compareAndSwapLong(this, STATE, s, next = s + RUNIT)) ?    // 低八位<126
                 next : acquireRead(false, 0L));
     }
 
@@ -558,12 +558,12 @@ public class StampedLock implements java.io.Serializable {
     public void unlockRead(long stamp) {
         long s, m; WNode h;
         for (;;) {
-            if (((s = state) & SBITS) != (stamp & SBITS) ||
-                    (stamp & ABITS) == 0L || (m = s & ABITS) == 0L || m == WBIT)
+            if (((s = state) & SBITS) != (stamp & SBITS) ||         // 两者不相等？
+                    (stamp & ABITS) == 0L || (m = s & ABITS) == 0L || m == WBIT)    // 读写都为0，只有读锁被持有
                 throw new IllegalMonitorStateException();
             if (m < RFULL) {
                 if (U.compareAndSwapLong(this, STATE, s, s - RUNIT)) {
-                    if (m == RUNIT && (h = whead) != null && h.status != 0)
+                    if (m == RUNIT && (h = whead) != null && h.status != 0)         // 检查还需要释放队列中的等待节点
                         release(h);
                     break;
                 }
@@ -889,7 +889,7 @@ public class StampedLock implements java.io.Serializable {
                 throws InterruptedException {
             return tryReadLock(time, unit) != 0L;
         }
-        public void unlock() { unstampedUnlockRead(); }
+        public void unlock() { unstampedUnlockRead(); }                 // 支持非票据（信笺）的解锁
         public Condition newCondition() {
             throw new UnsupportedOperationException();
         }
@@ -1127,11 +1127,11 @@ public class StampedLock implements java.io.Serializable {
     }
 
     /**
-     * See above for explanation.
-     *
-     * @param interruptible true if should check interrupts and if so
-     * return INTERRUPTED
-     * @param deadline if nonzero, the System.nanoTime value to timeout
+     * See above for explanation.                                       基本流程就是先判断同步队列是否为空，如果为空那么尝试获取读状态，同时如果此时写状态被占有的话还是会根据spins的值随机的自旋一定的时间如果还是没获取到则跳出自旋进入外层的循环。
+     *                                                                  如果不为空说明已经有别的线程在排队了自己肯定是没戏了，那么开始检查是否需要初始化，如果没有初始化则构造一个WMODE的节点作为头节点。
+     * @param interruptible true if should check interrupts and if so   此时构造当前线程的节点node尝试加入同步队列，加入的方式有两种，一种是如果队列的tail是WMODE或者队列的head==tail，那么直接加入队列的尾部，并跳出外层循环，一种是加入tail节点的cowait的链中。并继续执行。
+     * return INTERRUPTED                                               在最后一个for循环中，节点的自旋限制为先驱节点就是头节点，并且自旋同样不是无休止的，二十通过一个spins的值来控制，并且是相对随机的。
+     * @param deadline if nonzero, the System.nanoTime value to timeout 同时在cowait的上面等待的节点都是RMODE，所以如果cowai节点对应的同步队列中的节点一旦解放那就意味着这个链上的所有节点都会被解放。
      * at (and return zero)
      * @return next state, or INTERRUPTED
      */
