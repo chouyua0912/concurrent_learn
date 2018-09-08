@@ -34,5 +34,11 @@ public class StampedLockDemoTest {
         example.readLockTwo();
     }
 
+    @Test
+    public void testCheckIfReadLockCanBeyond126() {
+        example.checkIfReadLockCanBeyond126();
+    }
+
+
     private StampedLockDemo example = new StampedLockDemo();
 } 

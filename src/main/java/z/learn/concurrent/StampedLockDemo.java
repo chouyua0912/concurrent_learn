@@ -64,6 +64,28 @@ class StampedLockDemo {
     }
 
     /**
+     * 检验是否可以持有超过126个读锁
+     */
+    void checkIfReadLockCanBeyond126() {
+        StampedLock s = new StampedLock();
+        doCheckIfReadLockCanBeyond126(s);
+    }
+
+    void doCheckIfReadLockCanBeyond126(StampedLock s) {
+        long stamp = s.readLock();
+        try {
+            System.out.println(stamp);
+            if (stamp < 381)                    // 382-256=126
+                doCheckIfReadLockCanBeyond126(s);
+            else
+                System.out.println("end");   // 会一直保持382递归，直到栈溢出为止 overflow了之后会一直返回382给readLock的调用者
+        } finally {
+            s.unlockRead(stamp);
+        }
+    }
+
+
+    /**
      * 也可以通过View来使用
      * 提供更易懂的接口来使用信笺锁
      */
