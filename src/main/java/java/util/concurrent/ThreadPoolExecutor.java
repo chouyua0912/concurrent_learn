@@ -322,12 +322,12 @@ import java.util.*;
  */
 public class ThreadPoolExecutor extends AbstractExecutorService {
     /**
-     * The main pool control state, ctl, is an atomic integer packing
+     * The main pool control state, ctl, is an atomic integer packing   ctl包含两部分控制
      * two conceptual fields
-     *   workerCount, indicating the effective number of threads        包含 worker数量 workerCount
+     *   workerCount, indicating the effective number of threads        包含 worker数量 workerCount     29位，大约500万
      *   runState,    indicating whether running, shutting down etc     线程池状态 runState
      *
-     * In order to pack them into one int, we limit workerCount to
+     * In order to pack them into one int, we limit workerCount to      工作现场说
      * (2^29)-1 (about 500 million) threads rather than (2^31)-1 (2
      * billion) otherwise representable. If this is ever an issue in
      * the future, the variable can be changed to be an AtomicLong,
@@ -339,16 +339,16 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * transiently different from the actual number of live threads,
      * for example when a ThreadFactory fails to create a thread when
      * asked, and when exiting threads are still performing
-     * bookkeeping before terminating. The user-visible pool size is
-     * reported as the current size of the workers set.
+     * bookkeeping before terminating. The user-visible pool size is        工作线程数大小是通过 worker.size获取的，而不是通过workerCounter计算
+     * reported as the current size of the workers set.                     workerCounter更新后不会立马反应到线程实际数量的变化上
      *
      * The runState provides the main lifecycle control, taking on values:
      *
-     *   RUNNING:  Accept new tasks and process queued tasks
-     *   SHUTDOWN: Don't accept new tasks, but process queued tasks
-     *   STOP:     Don't accept new tasks, don't process queued tasks,
+     *   RUNNING:  Accept new tasks and process queued tasks                接收新任务，处理队列的任务
+     *   SHUTDOWN: Don't accept new tasks, but process queued tasks         不接受新任务，处理队列剩余的任务
+     *   STOP:     Don't accept new tasks, don't process queued tasks,      不接受任务，不处理队列剩余任务，发送中断到正在处理中的任务
      *             and interrupt in-progress tasks
-     *   TIDYING:  All tasks have terminated, workerCount is zero,
+     *   TIDYING:  All tasks have terminated, workerCount is zero,          所有任务已经结束，workerCounter为0，线程也在消亡
      *             the thread transitioning to state TIDYING
      *             will run the terminated() hook method
      *   TERMINATED: terminated() has completed
@@ -358,15 +358,15 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * time, but need not hit each state. The transitions are:
      *
      * RUNNING -> SHUTDOWN
-     *    On invocation of shutdown(), perhaps implicitly in finalize()
+     *    On invocation of shutdown(), perhaps implicitly in finalize()     shutdown 触发状态变化
      * (RUNNING or SHUTDOWN) -> STOP
-     *    On invocation of shutdownNow()
+     *    On invocation of shutdownNow()                                    shutdownNow触发
      * SHUTDOWN -> TIDYING
      *    When both queue and pool are empty
      * STOP -> TIDYING
      *    When pool is empty
      * TIDYING -> TERMINATED
-     *    When the terminated() hook method has completed
+     *    When the terminated() hook method has completed                   留给子类的terminated钩子调用结束了
      *
      * Threads waiting in awaitTermination() will return when the
      * state reaches TERMINATED.
@@ -469,7 +469,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     private final HashSet<Worker> workers = new HashSet<Worker>();  // 维护worker数组
 
     /**
-     * Wait condition to support awaitTermination
+     * Wait condition to support awaitTermination               awaitTermination等待的时间
      */
     private final Condition termination = mainLock.newCondition();
 
@@ -677,8 +677,8 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     private void advanceRunState(int targetState) {
         for (;;) {
             int c = ctl.get();
-            if (runStateAtLeast(c, targetState) ||
-                    ctl.compareAndSet(c, ctlOf(targetState, workerCountOf(c))))
+            if (runStateAtLeast(c, targetState) ||                          // 已经是 targetState了，不需要修改，进入if，break出来
+                    ctl.compareAndSet(c, ctlOf(targetState, workerCountOf(c))))     // ctlOf(targetState, workerCountOf(c)) 组合计算出来新的 ctl值
                 break;
         }
     }
@@ -694,14 +694,14 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * allow access from ScheduledThreadPoolExecutor.
      */
     final void tryTerminate() {
-        for (;;) {
+        for (;;) {                          // 通过循环检查线程池的工作状态，决定是否将runState增长到TERMINATED
             int c = ctl.get();
             if (isRunning(c) ||
                     runStateAtLeast(c, TIDYING) ||
                     (runStateOf(c) == SHUTDOWN && ! workQueue.isEmpty()))
                 return;
             if (workerCountOf(c) != 0) { // Eligible to terminate
-                interruptIdleWorkers(ONLY_ONE);
+                interruptIdleWorkers(ONLY_ONE);         // 每次打断一个worker
                 return;
             }
 
@@ -767,7 +767,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * Interrupts threads that might be waiting for tasks (as
+     * Interrupts threads that might be waiting for tasks (as           打断那些正在等待任务的线程
      * indicated by not being locked) so they can check for
      * termination or configuration changes. Ignores
      * SecurityExceptions (in which case some threads may remain
@@ -791,7 +791,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         try {
             for (Worker w : workers) {
                 Thread t = w.thread;
-                if (!t.isInterrupted() && w.tryLock()) {
+                if (!t.isInterrupted() && w.tryLock()) {    // 正在执行任务的时候是不能lock住的
                     try {
                         t.interrupt();
                     } catch (SecurityException ignore) {
@@ -905,7 +905,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
             int rs = runStateOf(c);
 
             // Check if queue empty only if necessary.
-            if (rs >= SHUTDOWN &&
+            if (rs >= SHUTDOWN &&                   // 线程池已经关闭
                     ! (rs == SHUTDOWN &&
                             firstTask == null &&
                             ! workQueue.isEmpty()))
@@ -1143,7 +1143,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                         !wt.isInterrupted())
                     wt.interrupt();
                 try {
-                    beforeExecute(wt, task);    // 允许插入操作
+                    beforeExecute(wt, task);            // 允许插入操作
                     Throwable thrown = null;
                     try {
                         task.run();
@@ -1154,7 +1154,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                     } catch (Throwable x) {
                         thrown = x; throw new Error(x);
                     } finally {
-                        afterExecute(task, thrown); // 允许插入后置操作
+                        afterExecute(task, thrown);     // 允许插入后置操作
                     }
                 } finally {
                     task = null;
@@ -1380,9 +1380,9 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * Initiates an orderly shutdown in which previously submitted
-     * tasks are executed, but no new tasks will be accepted.
-     * Invocation has no additional effect if already shut down.
+     * Initiates an orderly shutdown in which previously submitted          已经在线程池内的任务会执行完毕
+     * tasks are executed, but no new tasks will be accepted.               不接受新的任务
+     * Invocation has no additional effect if already shut down.            已经shutdown情况下调用不会报错
      *
      * <p>This method does not wait for previously submitted tasks to
      * complete execution.  Use {@link #awaitTermination awaitTermination}
@@ -1394,14 +1394,14 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         final ReentrantLock mainLock = this.mainLock;
         mainLock.lock();
         try {
-            checkShutdownAccess();
-            advanceRunState(SHUTDOWN);  // 跳转到SHUTDOWN状态
+            checkShutdownAccess();      // 检查权限
+            advanceRunState(SHUTDOWN);  // 跳转到SHUTDOWN状态  线程池不接受新的任务了
             interruptIdleWorkers();     // 通过打断worker线程来唤醒park在getTask（take）的的线程
-            onShutdown(); // hook for ScheduledThreadPoolExecutor
+            onShutdown(); // hook for ScheduledThreadPoolExecutor       留给子类去实现的方法
         } finally {
             mainLock.unlock();
         }
-        tryTerminate();
+        tryTerminate();                 // shutdown()  停止线程池
     }
 
     /**
@@ -1443,7 +1443,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
 
     /**
      * Returns true if this executor is in the process of terminating
-     * after {@link #shutdown} or {@link #shutdownNow} but has not
+     * after {@link #shutdown} or {@link #shutdownNow} but has not          检查是否正在关闭中，还没有关闭完成
      * completely terminated.  This method may be useful for
      * debugging. A return of {@code true} reported a sufficient
      * period after shutdown may indicate that submitted tasks have
@@ -1461,7 +1461,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         return runStateAtLeast(ctl.get(), TERMINATED);
     }
 
-    public boolean awaitTermination(long timeout, TimeUnit unit)
+    public boolean awaitTermination(long timeout, TimeUnit unit)            // 等待指定时长检查是否已经关闭了
             throws InterruptedException {
         long nanos = unit.toNanos(timeout);
         final ReentrantLock mainLock = this.mainLock;
@@ -1472,7 +1472,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                     return true;
                 if (nanos <= 0)
                     return false;
-                nanos = termination.awaitNanos(nanos);
+                nanos = termination.awaitNanos(nanos);                  // 在tryTerminate里面结束了会通知 条件满足结束  shutdown -> tryTerminate
             }
         } finally {
             mainLock.unlock();
@@ -2008,7 +2008,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * Method invoked when the Executor has terminated.  Default
      * implementation does nothing. Note: To properly nest multiple
      * overridings, subclasses should generally invoke
-     * {@code super.terminated} within this method.
+     * {@code super.terminated} within this method.                     子类覆盖
      */
     protected void terminated() { }
 
