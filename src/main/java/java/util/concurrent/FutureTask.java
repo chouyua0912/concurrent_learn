@@ -235,7 +235,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
     }
 
     /**
-     * Causes this future to report an {@link ExecutionException}
+     * Causes this future to report an {@link ExecutionException}           代理了Callable和Runnable的run方法
      * with the given throwable as its cause, unless this future has
      * already been set or has been cancelled.
      *
@@ -271,7 +271,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
                     setException(ex);   // exception回写执行结果
                 }
                 if (ran)
-                    set(result);    // 回写执行结果
+                    set(result);    // 回写执行结果，并唤醒等待队列中的任务
             }
         } finally {
             // runner must be non-null until state is settled to
@@ -387,7 +387,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
     }
 
     /**
-     * Awaits completion or aborts on interrupt or timeout.
+     * Awaits completion or aborts on interrupt or timeout.             实现了一个简单的线程同步等待队列
      *
      * @param timed true if use timed waits
      * @param nanos time to wait, if timed
